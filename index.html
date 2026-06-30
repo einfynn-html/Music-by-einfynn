@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mein Playlist Mini-Player</title>
+    <title>Mein Playlist Mini-Player mit Live-News</title>
     <style>
         /* Grunddesign & Hintergrund */
         body, html {
@@ -126,7 +126,7 @@
 <body>
 
     <div class="player-container" id="player-card">
-        <h2 class="title">Aktueller Titel</h2>
+        <h2 class="title" id="player-mode-title">Aktueller Titel</h2>
         <div id="video-title" class="track-name">Player lädt...</div>
 
         <div class="mini-player-wrapper">
@@ -143,10 +143,20 @@
         <div class="badge-container">
             <span class="badge" style="background-color: #00b4d8;">Richtlinienkonform</span>
             <span class="badge" style="background-color: #9b5de5;">🔀 Echter Zufall</span>
+            <span class="badge" id="news-badge" style="background-color: #2a9d8f;">📢 Live News Laden...</span>
         </div>
     </div>
 
     <script>
+        // Feeds direkt aus deinem Dashboard übernommen
+        const FEEDS = [
+          { key: "world", label: "Google News", rss: "https://news.google.com/rss?hl=de&gl=DE&ceid=DE:de" },
+          { key: "top", label: "Reuters World", rss: "https://news.google.com/rss/search?q=site%3Areuters.com%2Fworld&hl=de&gl=DE&ceid=DE:de" },
+          { key: "breaking", label: "BBC World", rss: "https://news.google.com/rss/search?q=site%3Abbc.com%2Fnews%2Fworld&hl=de&gl=DE&ceid=DE:de" },
+          { key: "business", label: "Al Jazeera", rss: "https://news.google.com/rss/search?q=site%3Aaljazeera.com&hl=de&gl=DE&ceid=DE:de" },
+          { key: "tech", label: "DW World", rss: "https://news.google.com/rss/search?q=site%3Adw.com%2Fen%2Fworld&hl=de&gl=DE&ceid=DE:de" }
+        ];
+
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -154,6 +164,48 @@
 
         var player;
         var firstStart = true; 
+        
+        // Zähler und Live-News Speicher
+        var songsPlayed = 0;
+        var songsUntilNextNews = Math.floor(Math.random() * 2) + 1; 
+        var liveNewsArticles = [];
+
+        // Hilfsfunktion zum Bereinigen von HTML-Tags aus RSS-Inhalten
+        function stripHtml(html) {
+            const div = document.createElement('div');
+            div.innerHTML = html || '';
+            return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+        }
+
+        // Live-Nachrichten asynchron im Hintergrund laden (wie im Dashboard)
+        async function fetchLiveNews() {
+            let collected = [];
+            for (const feed of FEEDS) {
+                try {
+                    const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.rss)}`;
+                    const res = await fetch(api);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === 'ok' && data.items) {
+                            data.items.forEach(item => {
+                                collected.push({
+                                    source: feed.label,
+                                    title: stripHtml(item.title || '')
+                                });
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error("Fehler beim Laden von " + feed.label, e);
+                }
+            }
+            if (collected.length > 0) {
+                liveNewsArticles = collected;
+                document.getElementById('news-badge').innerText = `📢 ${liveNewsArticles.length} Live News bereit`;
+            } else {
+                document.getElementById('news-badge').innerText = `📢 News Offline`;
+            }
+        }
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
@@ -170,6 +222,8 @@
                     'onStateChange': onPlayerStateChange
                 }
             });
+            // Direkt beim Laden des Players die Nachrichten abrufen
+            fetchLiveNews();
         }
 
         function onPlayerReady(event) {
@@ -178,40 +232,75 @@
 
         function playRandomVideo() {
             if (!player) return;
-            
-            // Sicherstellen, dass getPlaylist existiert und nicht leer ist
+            window.speechSynthesis.cancel();
+
             if (typeof player.getPlaylist === 'function') {
                 var playlist = player.getPlaylist();
                 if (playlist && playlist.length > 0) {
                     var randomIndex = Math.floor(Math.random() * playlist.length);
                     player.playVideoAt(randomIndex);
                 } else {
-                    // Fallback, falls die API noch lädt
                     if (typeof player.nextVideo === 'function') player.nextVideo();
                 }
             }
         }
 
+        function playNewsTTS() {
+            if (!player) return;
+
+            player.pauseVideo();
+            document.getElementById('player-mode-title').innerText = "Radio News Flash";
+            
+            let newsText = "";
+            
+            // Wenn Live-Nachrichten erfolgreich geladen wurden, wähle eine aus
+            if (liveNewsArticles.length > 0) {
+                var randomArticle = liveNewsArticles[Math.floor(Math.random() * liveNewsArticles.length)];
+                newsText = `Hier ist eine aktuelle Meldung von ${randomArticle.source}: ${randomArticle.title}`;
+            } else {
+                // Fallback, falls das Laden fehlschlug oder blockiert wurde
+                newsText = "Hier sind die Kurznachrichten. Aktuell konnten keine Live Meldungen geladen werden. Bitte überprüfe deine Internetverbindung.";
+            }
+
+            document.getElementById('video-title').innerText = "📢 " + newsText;
+
+            var utterance = new SpeechSynthesisUtterance(newsText);
+            utterance.lang = 'de-DE';
+            utterance.rate = 1.0; 
+
+            utterance.onend = function() {
+                songsPlayed = 0;
+                songsUntilNextNews = Math.floor(Math.random() * 2) + 1;
+                document.getElementById('player-mode-title').innerText = "Aktueller Titel";
+                
+                // Nach den News im Hintergrund die Feeds neu laden, damit sie frisch bleiben
+                fetchLiveNews();
+                playRandomVideo();
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
         function onPlayerStateChange(event) {
-            // Beim ersten Start ein zufälliges Video wählen
             if (event.data == YT.PlayerState.PLAYING && firstStart) {
                 firstStart = false;
                 playRandomVideo();
-                return; // Verhindert, dass der Code darunter sofort ausgeführt wird
+                return;
             }
 
-            // Automatisches Weiterlaufen bei Video-Ende
             if (event.data == YT.PlayerState.ENDED) {
-                playRandomVideo();
+                songsPlayed++; 
+                if (songsPlayed >= songsUntilNextNews) {
+                    playNewsTTS(); 
+                } else {
+                    playRandomVideo(); 
+                }
             }
 
-            // UI Aktualisierung (Hintergrund & Titel)
             if (event.data == YT.PlayerState.PLAYING) {
                 var videoData = player.getVideoData();
-                
                 if (videoData && videoData.title && videoData.video_id) {
                     document.getElementById('video-title').innerText = videoData.title;
-                    
                     var videoId = videoData.video_id;
                     var thumbnailUrl = "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg";
                     
