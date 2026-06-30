@@ -149,7 +149,7 @@
 
         // 2. Erstellt den Player
         var player;
-        var shuffleTriggered = false; // Kontrollvariable, damit Shuffle nur einmal getriggert wird
+        var shuffleTriggered = false; // Kontrollvariable für den echten Zufallsstart
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
@@ -168,26 +168,22 @@
             });
         }
 
-        // 3. Wenn geladen, Text aktualisieren
         function onPlayerReady(event) {
             document.getElementById('video-title').innerText = "Bereit! Drücke auf Play";
         }
 
-        // 4. Wenn ein Song startet, Titel auslesen und Shuffle erzwingen
+        // 3. Wenn der User auf "Play" drückt, wird hier der echte Zufall erzwungen
         function onPlayerStateChange(event) {
             if (event.data == YT.PlayerState.PLAYING) {
                 
-                // BEHEBUNG SHUFFLE-FEHLER:
-                // Sobald die Wiedergabe startet, mischen wir die Playlist im Hintergrund durch.
                 if (!shuffleTriggered) {
-                    player.setShuffle(true);
-                    shuffleTriggered = true;
-                    
-                    // Optional: Wenn du willst, dass AUCH der allererste Song direkt zufällig ist, 
-                    // kannst du die nächste Zeile einkommentieren (einfach die // am Anfang löschen):
-                    // player.nextVideo(); 
+                    player.setShuffle(true); // 1. Playlist durchmischen
+                    shuffleTriggered = true; // 2. Diesen Block sperren, damit es keine Endlosschleife gibt
+                    player.nextVideo();      // 3. Sofort zum ersten zufälligen Song springen!
+                    return;                  // Funktion abbrechen, da gleich das nächste "PLAYING"-Event kommt
                 }
 
+                // Zeigt den Titel des zufälligen Songs an
                 var videoData = player.getVideoData();
                 if (videoData && videoData.title) {
                     document.getElementById('video-title').innerText = videoData.title;
