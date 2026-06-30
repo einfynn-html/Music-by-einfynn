@@ -128,10 +128,10 @@
         </div>
 
         <div class="controls-bar">
-            <button onclick="player.previousVideo()">⏮ Zurück</button>
-            <button onclick="player.playVideo()">▶ Play</button>
-            <button onclick="player.pauseVideo()">⏸ Pause</button>
-            <button onclick="player.nextVideo()">⏭ Weiter</button>
+            <button onclick="if(player) player.previousVideo()">⏮ Zurück</button>
+            <button onclick="if(player) player.playVideo()">▶ Play</button>
+            <button onclick="if(player) player.pauseVideo()">⏸ Pause</button>
+            <button onclick="if(player) player.nextVideo()">⏭ Weiter</button>
         </div>
         
         <div class="badge-container">
@@ -147,17 +147,19 @@
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        // 2. Erstellt den Player mit sichtbaren Mini-Maßen
+        // 2. Erstellt den Player
         var player;
+        var shuffleTriggered = false; // Kontrollvariable, damit Shuffle nur einmal getriggert wird
+
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
-                height: '135', // Höhe des Mini-Fensters
-                width: '240',  // Breite des Mini-Fensters
+                height: '135', 
+                width: '240',  
                 playerVars: {
                     'listType': 'playlist',
-                    'list': 'PL6eXo8yI7UvPYmPgOJe85CCvhimAEKJb0', // Deine Playlist
+                    'list': 'PL6eXo8yI7UvPYmPgOJe85CCvhimAEKJb0', 
                     'loop': 1,
-                    'controls': 1 // Zeigt die originalen YouTube-Elemente im Mini-Fenster für volle Konformität
+                    'controls': 1 
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -166,19 +168,30 @@
             });
         }
 
-        // 3. Wenn geladen, Text aktualisieren und Shuffle aktivieren
+        // 3. Wenn geladen, Text aktualisieren
         function onPlayerReady(event) {
             document.getElementById('video-title').innerText = "Bereit! Drücke auf Play";
-            
-            // HIER WIRD DIE PLAYLIST RANDOM GEORDNET:
-            player.setShuffle(true); 
         }
 
-        // 4. Wenn ein Song startet, Titel oben auslesen
+        // 4. Wenn ein Song startet, Titel auslesen und Shuffle erzwingen
         function onPlayerStateChange(event) {
             if (event.data == YT.PlayerState.PLAYING) {
+                
+                // BEHEBUNG SHUFFLE-FEHLER:
+                // Sobald die Wiedergabe startet, mischen wir die Playlist im Hintergrund durch.
+                if (!shuffleTriggered) {
+                    player.setShuffle(true);
+                    shuffleTriggered = true;
+                    
+                    // Optional: Wenn du willst, dass AUCH der allererste Song direkt zufällig ist, 
+                    // kannst du die nächste Zeile einkommentieren (einfach die // am Anfang löschen):
+                    // player.nextVideo(); 
+                }
+
                 var videoData = player.getVideoData();
-                document.getElementById('video-title').innerText = videoData.title;
+                if (videoData && videoData.title) {
+                    document.getElementById('video-title').innerText = videoData.title;
+                }
             }
         }
     </script>
