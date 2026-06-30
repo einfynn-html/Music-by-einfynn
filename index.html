@@ -24,7 +24,6 @@
         .player-container {
             width: 90%;
             max-width: 500px;
-            /* Standard-Hintergrund, wird durch JS überschrieben */
             background: rgba(255, 255, 255, 0.05); 
             padding: 30px 20px;
             border-radius: 16px;
@@ -35,7 +34,6 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            /* Weicher Übergang beim Wechsel des Hintergrundbildes */
             transition: background-image 0.5s ease-in-out;
         }
 
@@ -47,7 +45,6 @@
             color: #a0aec0;
             text-transform: uppercase;
             letter-spacing: 1px;
-            /* Textschatten für bessere Lesbarkeit auf Bildern */
             text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
         }
 
@@ -60,7 +57,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            /* Textschatten für bessere Lesbarkeit auf Bildern */
             text-shadow: 1px 1px 4px rgba(0,0,0,0.9);
         }
 
@@ -138,28 +134,26 @@
         </div>
 
         <div class="controls-bar">
-            <button onclick="if(player) player.previousVideo()">⏮ Zurück</button>
+            <button onclick="playRandomVideo()">⏮ Zurück</button>
             <button onclick="if(player) player.playVideo()">▶ Play</button>
             <button onclick="if(player) player.pauseVideo()">⏸ Pause</button>
-            <button onclick="if(player) player.nextVideo()">⏭ Weiter</button>
+            <button onclick="playRandomVideo()">⏭ Weiter</button>
         </div>
         
         <div class="badge-container">
             <span class="badge" style="background-color: #00b4d8;">Richtlinienkonform</span>
-            <span class="badge" style="background-color: #9b5de5;">🔀 Shuffle aktiv</span>
+            <span class="badge" style="background-color: #9b5de5;">🔀 Echter Zufall</span>
         </div>
     </div>
 
     <script>
-        // 1. Lädt den Code für die YouTube IFrame API
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        // 2. Erstellt den Player
         var player;
-        var shuffleTriggered = false; // Kontrollvariable für den echten Zufallsstart
+        var firstStart = true; // Kontrollvariable für den allerersten Start
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
@@ -168,7 +162,8 @@
                 playerVars: {
                     'listType': 'playlist',
                     'list': 'PL6eXo8yI7UvPYmPgOJe85CCvhimAEKJb0', 
-                    'loop': 1,
+                    // loop deaktiviert, da wir das Ende des Videos manuell abfangen
+                    'loop': 0, 
                     'controls': 1 
                 },
                 events: {
@@ -182,29 +177,43 @@
             document.getElementById('video-title').innerText = "Bereit! Drücke auf Play";
         }
 
-        // 3. Wenn der User auf "Play" drückt, wird hier der echte Zufall erzwungen
-        function onPlayerStateChange(event) {
-            if (event.data == YT.PlayerState.PLAYING) {
+        // Funktion, um ein absolut zufälliges Video aus der Playlist zu wählen
+        function playRandomVideo() {
+            if (!player) return;
+            
+            var playlist = player.getPlaylist();
+            if (playlist && playlist.length > 0) {
+                // Erzeugt eine zufällige Zahl zwischen 0 und der Anzahl der Songs in der Playlist
+                var randomIndex = Math.floor(Math.random() * playlist.length);
                 
-                if (!shuffleTriggered) {
-                    player.setShuffle(true); // 1. Playlist durchmischen
-                    shuffleTriggered = true; // 2. Diesen Block sperren, damit es keine Endlosschleife gibt
-                    player.nextVideo();      // 3. Sofort zum ersten zufälligen Song springen!
-                    return;                  // Funktion abbrechen, da gleich das nächste "PLAYING"-Event kommt
-                }
+                // Springt direkt zum zufälligen Song-Index
+                player.playVideoAt(randomIndex);
+            }
+        }
 
-                // Holt die Daten des aktuellen Videos
+        function onPlayerStateChange(event) {
+            // 1. Erster Klick auf "Play" -> direkt ein zufälliges Video starten
+            if (event.data == YT.PlayerState.PLAYING && firstStart) {
+                firstStart = false;
+                playRandomVideo();
+                return;
+            }
+
+            // 2. Wenn das aktuelle Video endet (YT.PlayerState.ENDED -> Wert ist 0)
+            if (event.data == YT.PlayerState.ENDED) {
+                playRandomVideo(); // Sofort das nächste zufällige Video starten
+            }
+
+            // Update der UI (Titel & Thumbnail), wenn ein Video läuft
+            if (event.data == YT.PlayerState.PLAYING) {
                 var videoData = player.getVideoData();
                 
                 if (videoData && videoData.title && videoData.video_id) {
-                    // Setzt den Titel
                     document.getElementById('video-title').innerText = videoData.title;
                     
-                    // Generiert die URL für das Thumbnail
                     var videoId = videoData.video_id;
                     var thumbnailUrl = "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg";
                     
-                    // Setzt das Hintergrundbild der Kachel mit einem dunklen Gradient-Overlay
                     var playerCard = document.getElementById('player-card');
                     playerCard.style.backgroundImage = "linear-gradient(rgba(30, 30, 47, 0.85), rgba(17, 17, 27, 0.85)), url('" + thumbnailUrl + "')";
                     playerCard.style.backgroundSize = "cover";
