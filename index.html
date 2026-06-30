@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mein Playlist Player</title>
+    <title>Mein Playlist Mini-Player</title>
     <style>
         /* Grunddesign & Hintergrund */
         body, html {
@@ -20,10 +20,10 @@
             justify-content: center;
         }
 
-        /* Container für den Audio-Player */
+        /* Container für den Player */
         .player-container {
             width: 90%;
-            max-width: 600px;
+            max-width: 500px;
             background: rgba(255, 255, 255, 0.05);
             padding: 30px 20px;
             border-radius: 16px;
@@ -31,11 +31,14 @@
             backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         /* Titel und Track-Anzeige */
         .title {
-            font-size: 1.2rem;
+            font-size: 1rem;
             font-weight: 600;
             margin: 0 0 10px 0;
             color: #a0aec0;
@@ -44,11 +47,26 @@
         }
 
         .track-name {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: bold;
             color: #ff0055;
+            margin-bottom: 20px;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Das sichtbare Mini-Player-Fenster (16:9 Verhältnis) */
+        .mini-player-wrapper {
+            width: 240px;
+            height: 135px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             margin-bottom: 25px;
-            min-height: 35px; /* Verhindert das Springen des Layouts */
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         /* Eigene Steuerungs-Buttons */
@@ -56,7 +74,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
             flex-wrap: wrap;
         }
 
@@ -64,9 +82,9 @@
             background-color: rgba(255, 255, 255, 0.1);
             color: white;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 10px 20px;
+            padding: 10px 18px;
             border-radius: 30px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -79,7 +97,7 @@
         }
 
         .badge {
-            background-color: #ff0055;
+            background-color: #00b4d8;
             color: white;
             padding: 6px 12px;
             border-radius: 20px;
@@ -90,21 +108,17 @@
             margin-top: 20px;
             display: inline-block;
         }
-
-        /* Versteckt den eigentlichen YouTube-Player */
-        #youtube-player {
-            position: absolute;
-            width: 0;
-            height: 0;
-            border: none;
-        }
     </style>
 </head>
 <body>
 
     <div class="player-container">
-        <h2 class="title">Aktueller Song</h2>
+        <h2 class="title">Aktueller Titel</h2>
         <div id="video-title" class="track-name">Player lädt...</div>
+
+        <div class="mini-player-wrapper">
+            <div id="youtube-player"></div>
+        </div>
 
         <div class="controls-bar">
             <button onclick="player.previousVideo()">⏮ Zurück</button>
@@ -113,10 +127,10 @@
             <button onclick="player.nextVideo()">⏭ Weiter</button>
         </div>
         
-        <span class="badge">Dauerschleife aktiv</span>
+        <div>
+            <span class="badge">Richtlinienkonform</span>
+        </div>
     </div>
-
-    <div id="youtube-player"></div>
 
     <script>
         // 1. Lädt den Code für die YouTube IFrame API
@@ -125,16 +139,17 @@
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        // 2. Erstellt den Player, sobald die API bereit ist
+        // 2. Erstellt den Player mit sichtbaren Mini-Maßen
         var player;
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('youtube-player', {
-                height: '0',
-                width: '0',
+                height: '135', // Höhe des Mini-Fensters
+                width: '240',  // Breite des Mini-Fensters
                 playerVars: {
                     'listType': 'playlist',
-                    'list': 'PL6eXo8yI7UvPYmPgOJe85CCvhimAEKJb0', // Deine Playlist-ID
-                    'loop': 1
+                    'list': 'PL6eXo8yI7UvPYmPgOJe85CCvhimAEKJb0', // Deine Playlist
+                    'loop': 1,
+                    'controls': 1 // Zeigt die originalen YouTube-Elemente im Mini-Fenster für volle Konformität
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -143,19 +158,15 @@
             });
         }
 
-        // 3. Wird aufgerufen, wenn der Player fertig geladen ist
+        // 3. Wenn geladen, Text aktualisieren
         function onPlayerReady(event) {
-            // Zeigt an, dass der Nutzer jetzt auf Play drücken kann
             document.getElementById('video-title').innerText = "Bereit! Drücke auf Play";
         }
 
-        // 4. Wird aufgerufen, wenn sich der Status ändert (z.B. neues Video startet)
+        // 4. Wenn ein Song startet, Titel oben auslesen
         function onPlayerStateChange(event) {
-            // Wenn der Status "PLAYING" (1) ist
             if (event.data == YT.PlayerState.PLAYING) {
-                // Holt die Daten des aktuellen Videos
                 var videoData = player.getVideoData();
-                // Schreibt den Titel in unser HTML-Element
                 document.getElementById('video-title').innerText = videoData.title;
             }
         }
