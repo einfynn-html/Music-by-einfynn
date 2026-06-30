@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mein Playlist Mini-Player mit Live-News</title>
+    <title>Mein Playlist Mini-Player mit Live-News & Visuals</title>
     <style>
         /* Grunddesign & Hintergrund */
         body, html {
@@ -34,6 +34,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            position: relative;
             transition: background-image 0.5s ease-in-out;
         }
 
@@ -70,6 +71,44 @@
             margin-bottom: 25px;
             background: #000;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative; /* Wichtig für das News-Overlay */
+        }
+
+        /* NEU: Das visuelle News-Bild-Overlay direkt über dem Videofenster */
+        .news-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-color: #0b1020;
+            display: none; /* Standardmäßig unsichtbar */
+            z-index: 10;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        /* Schöner Fallback-Container, falls ein RSS-Bild nicht lädt */
+        .news-overlay-fallback {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #7c9cff, #5ef0c2);
+            color: #000;
+            font-weight: bold;
+            font-size: 18px;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
         /* Eigene Steuerungs-Buttons */
@@ -130,6 +169,7 @@
         <div id="video-title" class="track-name">Player lädt...</div>
 
         <div class="mini-player-wrapper">
+            <div id="news-visual-overlay" class="news-overlay"></div>
             <div id="youtube-player"></div>
         </div>
 
@@ -165,19 +205,17 @@
         var player;
         var firstStart = true; 
         
-        // Zähler und Live-News Speicher
         var songsPlayed = 0;
         var songsUntilNextNews = Math.floor(Math.random() * 2) + 1; 
         var liveNewsArticles = [];
 
-        // Hilfsfunktion zum Bereinigen von HTML-Tags aus RSS-Inhalten
         function stripHtml(html) {
             const div = document.createElement('div');
             div.innerHTML = html || '';
             return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
         }
 
-        // Live-Nachrichten asynchron im Hintergrund laden (wie im Dashboard)
+        // Live-Nachrichten asynchron im Hintergrund laden (inkl. Bildern falls vorhanden)
         async function fetchLiveNews() {
             let collected = [];
             for (const feed of FEEDS) {
@@ -190,7 +228,8 @@
                             data.items.forEach(item => {
                                 collected.push({
                                     source: feed.label,
-                                    title: stripHtml(item.title || '')
+                                    title: stripHtml(item.title || ''),
+                                    image: item.thumbnail || item.enclosure?.link || '' // Sammelt das Artikelbild
                                 });
                             });
                         }
@@ -222,7 +261,6 @@
                     'onStateChange': onPlayerStateChange
                 }
             });
-            // Direkt beim Laden des Players die Nachrichten abrufen
             fetchLiveNews();
         }
 
@@ -230,9 +268,18 @@
             document.getElementById('video-title').innerText = "Bereit! Drücke auf Play";
         }
 
+        // Wenn manuell gesprungen wird, das Overlay sofort verstecken und Sprache stoppen
+        function hideNewsOverlay() {
+            window.speechSynthesis.cancel();
+            const overlay = document.getElementById('news-visual-overlay');
+            overlay.style.display = 'none';
+            overlay.style.backgroundImage = 'none';
+            overlay.innerHTML = '';
+        }
+
         function playRandomVideo() {
             if (!player) return;
-            window.speechSynthesis.cancel();
+            hideNewsOverlay();
 
             if (typeof player.getPlaylist === 'function') {
                 var playlist = player.getPlaylist();
@@ -252,16 +299,28 @@
             document.getElementById('player-mode-title').innerText = "Radio News Flash";
             
             let newsText = "";
+            const overlay = document.getElementById('news-visual-overlay');
+            overlay.innerHTML = ''; // Vorherigen Inhalt leeren
             
-            // Wenn Live-Nachrichten erfolgreich geladen wurden, wähle eine aus
             if (liveNewsArticles.length > 0) {
                 var randomArticle = liveNewsArticles[Math.floor(Math.random() * liveNewsArticles.length)];
                 newsText = `Hier ist eine aktuelle Meldung von ${randomArticle.source}: ${randomArticle.title}`;
+                
+                // Falls ein valides Bild existiert, zeigen wir es an – andernfalls ein schönes Grafik-Fallback
+                if (randomArticle.image && randomArticle.image !== '') {
+                    overlay.style.backgroundImage = `url('${randomArticle.image}')`;
+                } else {
+                    overlay.style.backgroundImage = 'none';
+                    overlay.innerHTML = `<div class="news-overlay-fallback">📢 ${randomArticle.source}</div>`;
+                }
             } else {
-                // Fallback, falls das Laden fehlschlug oder blockiert wurde
-                newsText = "Hier sind die Kurznachrichten. Aktuell konnten keine Live Meldungen geladen werden. Bitte überprüfe deine Internetverbindung.";
+                newsText = "Hier sind die Kurznachrichten. Aktuell konnten keine Live Meldungen geladen werden.";
+                overlay.style.backgroundImage = 'none';
+                overlay.innerHTML = `<div class="news-overlay-fallback">⚠️ Offline</div>`;
             }
 
+            // Overlay sichtbar machen (Blendet sich über das YouTube Video)
+            overlay.style.display = 'flex';
             document.getElementById('video-title').innerText = "📢 " + newsText;
 
             var utterance = new SpeechSynthesisUtterance(newsText);
@@ -273,7 +332,9 @@
                 songsUntilNextNews = Math.floor(Math.random() * 2) + 1;
                 document.getElementById('player-mode-title').innerText = "Aktueller Titel";
                 
-                // Nach den News im Hintergrund die Feeds neu laden, damit sie frisch bleiben
+                // Overlay nach Beendigung der Durchsage wieder verstecken
+                hideNewsOverlay();
+                
                 fetchLiveNews();
                 playRandomVideo();
             };
@@ -298,6 +359,9 @@
             }
 
             if (event.data == YT.PlayerState.PLAYING) {
+                // Sicherstellen, dass das News-Overlay weg ist, wenn ein Video startet
+                document.getElementById('news-visual-overlay').style.display = 'none';
+                
                 var videoData = player.getVideoData();
                 if (videoData && videoData.title && videoData.video_id) {
                     document.getElementById('video-title').innerText = videoData.title;
